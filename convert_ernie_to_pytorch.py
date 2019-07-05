@@ -73,25 +73,29 @@ def extract_weights(args):
     place = fluid.CPUPlace()
     exe = fluid.Executor(place)
     exe.run(startup_prog)
+
     args.max_seq_len = 512
     args.use_fp16 = False
     args.num_labels = 2
     args.loss_scaling = 1.0
+
     print('model config:')
     ernie_config = ErnieConfig(args.ernie_config_path)
     ernie_config.print_config()
+
     with fluid.program_guard(test_prog, startup_prog):
         with fluid.unique_name.guard():
             _, _ = create_model(
                 args,
                 pyreader_name='train',
                 ernie_config=ernie_config)
+
     fluid.io.load_vars(exe, args.init_pretraining_params, main_program=test_prog, predicate=if_exist)
     state_dict = collections.OrderedDict()
     weight_map = build_weight_map()
     for ernie_name, pytorch_name in weight_map.items():
         fluid_tensor = fluid.global_scope().find_var(ernie_name).get_tensor()
-        fluid_array = np.array(fluid_tensor, dtype=np.float32)
+        fluid_array = np.array(fluid_tensor)
         if 'w_0' in ernie_name:
             fluid_array = fluid_array.transpose()
         state_dict[pytorch_name] = fluid_array
@@ -113,7 +117,7 @@ def save_model(state_dict, dump_path):
     ernie_config = ErnieConfig(args.ernie_config_path)._config_dict
     # set layer_norm_eps, more detail see: https://github.com/PaddlePaddle/LARK/issues/75
     ernie_config['layer_norm_eps'] = 1e-5
-    with open(os.path.join(dump_path, "bert_config.json"), 'wt', encoding='utf-8') as f:
+    with open(os.path.join(dump_path, "config.json"), 'wt', encoding='utf-8') as f:
         json.dump(ernie_config, f, indent=4)
     print('finish save config')
     # save vocab.txt
